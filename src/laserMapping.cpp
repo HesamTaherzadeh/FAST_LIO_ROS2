@@ -585,6 +585,8 @@ void publish_map(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub
     PointCloudXYZI::Ptr laserCloudWorld( \
                     new PointCloudXYZI(size, 1));
 
+    std::cerr << "Publishing map with (" <<  pcl_wait_pub->points.size() << ") number of points" << std::endl;
+
     for (int i = 0; i < size; i++)
     {
         RGBpointBodyToWorld(&laserCloudFullRes->points[i], \
@@ -836,7 +838,7 @@ public:
 
         this->get_parameter_or<bool>("publish.path_en", path_en, true);
         this->get_parameter_or<bool>("publish.effect_map_en", effect_pub_en, false);
-        this->get_parameter_or<bool>("publish.map_en", map_pub_en, false);
+        this->get_parameter_or<bool>("publish.map_en", map_pub_en, true);
         this->get_parameter_or<bool>("publish.scan_publish_en", scan_pub_en, true);
         this->get_parameter_or<bool>("publish.dense_publish_en", dense_pub_en, true);
         this->get_parameter_or<bool>("publish.scan_bodyframe_pub_en", scan_body_pub_en, true);
@@ -1108,8 +1110,8 @@ private:
     }
 
     void map_publish_callback()
-    {
-        if (map_pub_en) publish_map(pubLaserCloudMap_);
+    {   
+        publish_map(pubLaserCloudMap_);
     }
 
     void map_save_callback(std_srvs::srv::Trigger::Request::ConstSharedPtr req, std_srvs::srv::Trigger::Response::SharedPtr res)
@@ -1144,7 +1146,7 @@ private:
     rclcpp::TimerBase::SharedPtr map_pub_timer_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr map_save_srv_;
 
-    bool effect_pub_en = false, map_pub_en = false;
+    bool effect_pub_en = false, map_pub_en = true;
     int effect_feat_num = 0, frame_num = 0;
     double deltaT, deltaR, aver_time_consu = 0, aver_time_icp = 0, aver_time_match = 0, aver_time_incre = 0, aver_time_solve = 0, aver_time_const_H_time = 0;
     bool flg_EKF_converged, EKF_stop_flg = 0;

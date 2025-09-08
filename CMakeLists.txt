@@ -120,6 +120,11 @@ install(TARGETS fastlio_mapping
   DESTINATION lib/${PROJECT_NAME}
 )
 
+install(PROGRAMS
+  scripts/tf_to_odom.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 install(
   DIRECTORY config launch rviz
   DESTINATION share/${PROJECT_NAME}

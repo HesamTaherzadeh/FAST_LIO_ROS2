@@ -556,37 +556,87 @@ void Preprocess::mid360_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &
   }
 }
 
+struct PointXYZIRT                  // x,y,z,intensity,ring,timestamp
+{
+  PCL_ADD_POINT4D;                  // quad‑word XYZ
+  float     intensity;
+  uint16_t  ring;
+  double    timestamp;              // seconds (or whatever is in the bag)
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+} EIGEN_ALIGN16;
+
+POINT_CLOUD_REGISTER_POINT_STRUCT (
+  PointXYZIRT,
+  (float,    x,         x)
+  (float,    y,         y)
+  (float,    z,         z)
+  (float,    intensity, intensity)
+  (uint16_t, ring,      ring)
+  (double,   timestamp, timestamp)
+)
+
 void Preprocess::default_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg)
 {
-  pl_surf.clear();
-  pl_corn.clear();
-  pl_full.clear();
-
-  pcl::PointCloud<pcl::PointXYZI> pl_orig;
+  /* A. convert ------------------------------------------------------------ */
+  pl_surf.clear(); pl_corn.clear(); pl_full.clear();
+  pcl::PointCloud<PointXYZIRT> pl_orig;
   pcl::fromROSMsg(*msg, pl_orig);
-  int plsize = pl_orig.points.size();
-  if (plsize == 0)
-    return;
+
+  const int plsize = pl_orig.size();
+  if (plsize == 0) return;
+
   pl_surf.reserve(plsize);
-
-  for(uint i = 0; i < plsize; ++i)
+  double t_min = std::numeric_limits<double>::max();
+  for (const auto &p : pl_orig.points)
+      t_min = std::min(t_min, static_cast<double>(p.timestamp));
+  /* ---------------------------------------------------------------------- *
+   *  PATH‑1 : fast (no feature extraction)                                 */
+  if (!feature_enabled)
   {
-    PointType added_pt;
-    added_pt.normal_x = 0;
-    added_pt.normal_y = 0;
-    added_pt.normal_z = 0;
-    added_pt.x = pl_orig.points[i].x;
-    added_pt.y = pl_orig.points[i].y;
-    added_pt.z = pl_orig.points[i].z;
-    added_pt.intensity = pl_orig.points[i].intensity;
-    added_pt.curvature = 0.;
-
-    if (added_pt.x * added_pt.x + added_pt.y * added_pt.y + added_pt.z * added_pt.z > (blind * blind))
+    for (int i = 0; i < plsize; ++i)
     {
-      pl_surf.push_back(std::move(added_pt));
+      if (i % point_filter_num) continue;                   // down‑sample
+      const auto &src = pl_orig.points[i];
+      if (src.x*src.x + src.y*src.y + src.z*src.z < blind*blind) continue;
+
+      PointType pt;
+      pt.x = src.x;  pt.y = src.y;  pt.z = src.z;
+      pt.intensity = src.intensity;
+      pt.curvature = static_cast<float>((src.timestamp - t_min) * 1e3f); 
+
+      pl_surf.push_back(std::move(pt));
     }
+    return;
+  }
+
+  /* ---------------------------------------------------------------------- *
+   *  PATH‑2 : feature‑enabled (AVIA‑style)                                 */
+  for (int r = 0; r < N_SCANS; ++r) {
+    pl_buff[r].clear();
+    pl_buff[r].reserve(plsize / N_SCANS);
+  }
+
+  for (int i = 0; i < plsize; ++i)
+  {
+    const auto &src = pl_orig.points[i];
+    if (src.ring >= N_SCANS) continue;
+
+    PointType pt;
+    pt.x = src.x;  pt.y = src.y;  pt.z = src.z;
+    pt.intensity = src.intensity;
+    pt.curvature = static_cast<float>(src.timestamp * 1e3f);   // ABSOLUTE ms
+
+    pl_buff[src.ring].push_back(pt);
+  }
+
+  for (int r = 0; r < N_SCANS; ++r)
+  {
+    if (pl_buff[r].size() < 5) continue;
+    typess[r].assign(pl_buff[r].size(), orgtype{});
+    give_feature(pl_buff[r], typess[r]);
   }
 }
+
 
 void Preprocess::give_feature(pcl::PointCloud<PointType>& pl, vector<orgtype>& types)
 {
