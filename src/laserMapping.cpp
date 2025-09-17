@@ -1111,7 +1111,7 @@ private:
 
     void map_publish_callback()
     {   
-        publish_map(pubLaserCloudMap_);
+        // publish_map(pubLaserCloudMap_);
     }
 
     void map_save_callback(std_srvs::srv::Trigger::Request::ConstSharedPtr req, std_srvs::srv::Trigger::Response::SharedPtr res)
